@@ -5,8 +5,8 @@ const config = {
   width: 800,
   height: 600,
   scale: {
-    mode: Phaser.Scale.FIT,            // ← חדש: התאמה לגודל מסך
-    autoCenter: Phaser.Scale.CENTER_BOTH,  // ← חדש: מרכז הקאנווס
+    mode: Phaser.Scale.FIT,            // התאמה לגודל מסך
+    autoCenter: Phaser.Scale.CENTER_BOTH,  // מרכז את הקאנווס
   },
   physics: {
     default: 'arcade',
@@ -18,7 +18,6 @@ const config = {
 new Phaser.Game(config);
 
 let player, cursors;
-let touchDirection = 0;          // ← חדש: כיוון מגע (-1 שמאל, 1 ימין)
 let poopGroup, coinGroup;
 let score = 0, scoreText;
 let gameOverText, playButtonContainer;
@@ -36,6 +35,7 @@ function preload() {
 }
 
 function create() {
+  // איפוס פרמטרים
   score = 0;
   poopSpeedMin = 30; poopSpeedMax = 80;
   coinSpeedMin = 40; coinSpeedMax = 80;
@@ -57,56 +57,60 @@ function create() {
   // קלט מהמקלדת
   cursors = this.input.keyboard.createCursorKeys();
 
-  // קלט מגע למובייל
-  this.input.on('pointerdown', pointer => {
-    touchDirection = (pointer.x < this.scale.width / 2) ? -1 : 1;  // ← חדש
-  });
-  this.input.on('pointermove', pointer => {
-    touchDirection = (pointer.x < this.scale.width / 2) ? -1 : 1;  // ← חדש
-  });
-  this.input.on('pointerup', () => {
-    touchDirection = 0;  // ← חדש: שחרור מגע
-  });
-
-  // קבוצות
+  // קבוצות ופיזיקה
   poopGroup = this.physics.add.group();
   coinGroup = this.physics.add.group();
-
   this.physics.add.overlap(player, coinGroup, collectCoin, null, this);
-  this.physics.add.overlap(player, poopGroup, hitPoop, null, this);
+  this.physics.add.overlap(player, poopGroup, hitPoop,    null, this);
 
-  // טיימרים ליצירת פריטים
+  // טיימרים
   poopTimer = this.time.addEvent({ delay: 1000, callback: dropPoop, callbackScope: this, loop: true });
   coinTimer = this.time.addEvent({ delay: 1500, callback: dropCoin, callbackScope: this, loop: true });
   difficultyTimer = this.time.addEvent({ delay: 5000, callback: increaseDifficulty, callbackScope: this, loop: true });
 
-  // טקסט Game Over
-  gameOverText = this.add.text(400, 240, 'Game Over', {
-    fontSize: '48px', fontFamily: 'Arial', color: '#ff4444',
-    stroke: '#000', strokeThickness: 6
-  }).setOrigin(0.5).setVisible(false);
-
-  // Container לכפתור Play Again
+  // Game Over + Play Again
+  gameOverText = this.add.text(400, 240, 'Game Over', { fontSize: '48px', fontFamily: 'Arial', color: '#ff4444', stroke: '#000', strokeThickness: 6 })
+    .setOrigin(0.5).setVisible(false);
   playButtonContainer = this.add.container(400, 320).setVisible(false);
-  const bgRect = this.add.rectangle(0, 0, 200, 60, 0x00aa00)
-    .setStrokeStyle(4, 0x004400)
-    .setOrigin(0.5)
-    .setInteractive({ useHandCursor: true });
-  const btnText = this.add.text(0, 0, 'Play Again', {
-    fontSize: '28px', fontFamily: 'Arial', color: '#ffffff'
-  }).setOrigin(0.5);
+  const bgRect = this.add.rectangle(0, 0, 200, 60, 0x00aa00).setStrokeStyle(4, 0x004400).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  const btnText = this.add.text(0, 0, 'Play Again', { fontSize: '28px', fontFamily: 'Arial', color: '#ffffff' }).setOrigin(0.5);
   playButtonContainer.add([ bgRect, btnText ]);
-  bgRect
-    .on('pointerover', () => bgRect.setFillStyle(0x00cc00))
-    .on('pointerout',  () => bgRect.setFillStyle(0x00aa00))
-    .on('pointerup',   () => this.scene.restart());
+  bgRect.on('pointerover', () => bgRect.setFillStyle(0x00cc00))
+        .on('pointerout',  () => bgRect.setFillStyle(0x00aa00))
+        .on('pointerup',   () => this.scene.restart());
+
+  // אם זה מכשיר מגע – הוסף שתי אזורי זיהוי (zones) שקופים בלבד
+  if (this.sys.game.device.input.touch) {
+    const btnWidth  = this.scale.width * 0.4;
+    const btnHeight = this.scale.height * 0.3;
+
+    // לא משתמשים יותר ב-rectangle, רק zone שקוף
+    const leftZone = this.add.zone(
+      btnWidth / 2,
+      this.scale.height - btnHeight / 2,
+      btnWidth, btnHeight
+    ).setOrigin(0.5).setInteractive();
+
+    const rightZone = this.add.zone(
+      this.scale.width - btnWidth / 2,
+      this.scale.height - btnHeight / 2,
+      btnWidth, btnHeight
+    ).setOrigin(0.5).setInteractive();
+
+    leftZone.on('pointerdown', () => player.setVelocityX(-300))
+            .on('pointerup',   () => player.setVelocityX(0))
+            .on('pointerout',  () => player.setVelocityX(0));
+
+    rightZone.on('pointerdown', () => player.setVelocityX(300))
+             .on('pointerup',   () => player.setVelocityX(0))
+             .on('pointerout',  () => player.setVelocityX(0));
+  }
 }
 
 function update() {
+  // תמיכה במקלדת (דסקטופ)
   if      (cursors.left.isDown)  player.setVelocityX(-300);
   else if (cursors.right.isDown) player.setVelocityX(300);
-  else if (touchDirection < 0)   player.setVelocityX(-300);  // ← חדש: תנועה שמאלה ממגע
-  else if (touchDirection > 0)   player.setVelocityX(300);   // ← חדש: תנועה ימינה ממגע
   else                            player.setVelocityX(0);
 }
 
