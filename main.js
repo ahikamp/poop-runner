@@ -1,10 +1,12 @@
+// main.js
+
 const config = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
   scale: {
-    mode: Phaser.Scale.FIT,            // ממלא את כל החלון
-    autoCenter: Phaser.Scale.CENTER_BOTH,  // ומרכז
+    mode: Phaser.Scale.FIT,            // ← חדש: התאמה לגודל מסך
+    autoCenter: Phaser.Scale.CENTER_BOTH,  // ← חדש: מרכז הקאנווס
   },
   physics: {
     default: 'arcade',
@@ -15,14 +17,14 @@ const config = {
 
 new Phaser.Game(config);
 
-// משתנים גלובליים
 let player, cursors;
+let touchDirection = 0;          // ← חדש: כיוון מגע (-1 שמאל, 1 ימין)
 let poopGroup, coinGroup;
 let score = 0, scoreText;
 let gameOverText, playButtonContainer;
 let poopTimer, coinTimer, difficultyTimer;
 
-// טווחי מהירות התחלתיים
+// מהירויות התחלתיות
 let poopSpeedMin = 30, poopSpeedMax = 80;
 let coinSpeedMin = 40, coinSpeedMax = 80;
 
@@ -34,7 +36,6 @@ function preload() {
 }
 
 function create() {
-  // איפוס פרמטרים
   score = 0;
   poopSpeedMin = 30; poopSpeedMax = 80;
   coinSpeedMin = 40; coinSpeedMax = 80;
@@ -44,35 +45,45 @@ function create() {
 
   // שחקן
   player = this.physics.add.sprite(400, 500, 'player')
-               .setDisplaySize(64, 64)
-               .setCollideWorldBounds(true);
+    .setDisplaySize(64, 64)
+    .setCollideWorldBounds(true);
 
-  // מונה
+  // מונה מטבעות
   scoreText = this.add.text(16, 16, 'Coins: 0', {
     fontSize: '24px', fontFamily: 'Arial', color: '#ffffff',
     stroke: '#000000', strokeThickness: 3
   });
 
-  // קלט
+  // קלט מהמקלדת
   cursors = this.input.keyboard.createCursorKeys();
+
+  // קלט מגע למובייל
+  this.input.on('pointerdown', pointer => {
+    touchDirection = (pointer.x < this.scale.width / 2) ? -1 : 1;  // ← חדש
+  });
+  this.input.on('pointermove', pointer => {
+    touchDirection = (pointer.x < this.scale.width / 2) ? -1 : 1;  // ← חדש
+  });
+  this.input.on('pointerup', () => {
+    touchDirection = 0;  // ← חדש: שחרור מגע
+  });
 
   // קבוצות
   poopGroup = this.physics.add.group();
   coinGroup = this.physics.add.group();
 
-  // התנגשויות
   this.physics.add.overlap(player, coinGroup, collectCoin, null, this);
-  this.physics.add.overlap(player, poopGroup, hitPoop,    null, this);
+  this.physics.add.overlap(player, poopGroup, hitPoop, null, this);
 
-  // שמירת הטיימרים
-  poopTimer = this.time.addEvent({ delay: 1000, callback: dropPoop,  callbackScope: this, loop: true });
-  coinTimer = this.time.addEvent({ delay: 1500, callback: dropCoin,  callbackScope: this, loop: true });
+  // טיימרים ליצירת פריטים
+  poopTimer = this.time.addEvent({ delay: 1000, callback: dropPoop, callbackScope: this, loop: true });
+  coinTimer = this.time.addEvent({ delay: 1500, callback: dropCoin, callbackScope: this, loop: true });
   difficultyTimer = this.time.addEvent({ delay: 5000, callback: increaseDifficulty, callbackScope: this, loop: true });
 
   // טקסט Game Over
   gameOverText = this.add.text(400, 240, 'Game Over', {
-    fontSize: '48px', fontFamily: 'Arial',
-    color: '#ff4444', stroke: '#000', strokeThickness: 6
+    fontSize: '48px', fontFamily: 'Arial', color: '#ff4444',
+    stroke: '#000', strokeThickness: 6
   }).setOrigin(0.5).setVisible(false);
 
   // Container לכפתור Play Again
@@ -94,6 +105,8 @@ function create() {
 function update() {
   if      (cursors.left.isDown)  player.setVelocityX(-300);
   else if (cursors.right.isDown) player.setVelocityX(300);
+  else if (touchDirection < 0)   player.setVelocityX(-300);  // ← חדש: תנועה שמאלה ממגע
+  else if (touchDirection > 0)   player.setVelocityX(300);   // ← חדש: תנועה ימינה ממגע
   else                            player.setVelocityX(0);
 }
 
@@ -118,18 +131,15 @@ function collectCoin(player, coin) {
 }
 
 function hitPoop(player, poop) {
-  // עצירת פיזיקה
   this.physics.pause();
+  player.setTint(0xff0000);
 
-  // הסרת טיימרים ופריטים
   poopTimer.remove();
   coinTimer.remove();
   difficultyTimer.remove();
   poopGroup.clear(true, true);
   coinGroup.clear(true, true);
 
-  // Game Over
-  player.setTint(0xff0000);
   gameOverText.setVisible(true);
   playButtonContainer.setVisible(true);
 }
