@@ -1,12 +1,12 @@
-// main.js
+// main.js – full touch‑enabled version
 
 const config = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
   scale: {
-    mode: Phaser.Scale.FIT,            // התאמה לגודל מסך
-    autoCenter: Phaser.Scale.CENTER_BOTH,  // מרכז את הקאנווס
+    mode: Phaser.Scale.FIT,            // ממלא את המסך
+    autoCenter: Phaser.Scale.CENTER_BOTH,  // מרכז את הקנבס
   },
   physics: {
     default: 'arcade',
@@ -22,6 +22,11 @@ let poopGroup, coinGroup;
 let score = 0, scoreText;
 let gameOverText, playButtonContainer;
 let poopTimer, coinTimer, difficultyTimer;
+
+// BEGIN‑touch helpers
+let pointerActive = false;     // האם נגיעה פעילה כרגע
+let pointerX      = 0;         // מיקום X אחרון של הנגיעה
+// END‑touch helpers
 
 // מהירויות התחלתיות
 let poopSpeedMin = 30, poopSpeedMax = 80;
@@ -57,6 +62,25 @@ function create() {
   // קלט מהמקלדת
   cursors = this.input.keyboard.createCursorKeys();
 
+  // *** תמיכה מלאה במגע: הזזת השחקן לפי מיקום האצבע ***
+  this.input.on('pointerdown', pointer => {
+    pointerActive = true;
+    pointerX      = pointer.worldX;
+    movePlayerTo(pointerX);
+  });
+
+  this.input.on('pointermove', pointer => {
+    if (pointerActive) {
+      pointerX = pointer.worldX;
+      movePlayerTo(pointerX);
+    }
+  });
+
+  this.input.on('pointerup', () => {
+    pointerActive = false;
+    player.setVelocityX(0);   // עצירת תנועה כשעוזבים
+  });
+
   // קבוצות ופיזיקה
   poopGroup = this.physics.add.group();
   coinGroup = this.physics.add.group();
@@ -71,47 +95,40 @@ function create() {
   // Game Over + Play Again
   gameOverText = this.add.text(400, 240, 'Game Over', { fontSize: '48px', fontFamily: 'Arial', color: '#ff4444', stroke: '#000', strokeThickness: 6 })
     .setOrigin(0.5).setVisible(false);
+
   playButtonContainer = this.add.container(400, 320).setVisible(false);
-  const bgRect = this.add.rectangle(0, 0, 200, 60, 0x00aa00).setStrokeStyle(4, 0x004400).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  const bgRect = this.add.rectangle(0, 0, 200, 60, 0x00aa00)
+    .setStrokeStyle(4, 0x004400)
+    .setOrigin(0.5)
+    .setInteractive({ useHandCursor: true });
   const btnText = this.add.text(0, 0, 'Play Again', { fontSize: '28px', fontFamily: 'Arial', color: '#ffffff' }).setOrigin(0.5);
   playButtonContainer.add([ bgRect, btnText ]);
-  bgRect.on('pointerover', () => bgRect.setFillStyle(0x00cc00))
-        .on('pointerout',  () => bgRect.setFillStyle(0x00aa00))
-        .on('pointerup',   () => this.scene.restart());
-
-  // אם זה מכשיר מגע – הוסף שתי אזורי זיהוי (zones) שקופים בלבד
-  if (this.sys.game.device.input.touch) {
-    const btnWidth  = this.scale.width * 0.4;
-    const btnHeight = this.scale.height * 0.3;
-
-    // לא משתמשים יותר ב-rectangle, רק zone שקוף
-    const leftZone = this.add.zone(
-      btnWidth / 2,
-      this.scale.height - btnHeight / 2,
-      btnWidth, btnHeight
-    ).setOrigin(0.5).setInteractive();
-
-    const rightZone = this.add.zone(
-      this.scale.width - btnWidth / 2,
-      this.scale.height - btnHeight / 2,
-      btnWidth, btnHeight
-    ).setOrigin(0.5).setInteractive();
-
-    leftZone.on('pointerdown', () => player.setVelocityX(-300))
-            .on('pointerup',   () => player.setVelocityX(0))
-            .on('pointerout',  () => player.setVelocityX(0));
-
-    rightZone.on('pointerdown', () => player.setVelocityX(300))
-             .on('pointerup',   () => player.setVelocityX(0))
-             .on('pointerout',  () => player.setVelocityX(0));
-  }
+  bgRect
+    .on('pointerover', () => bgRect.setFillStyle(0x00cc00))
+    .on('pointerout',  () => bgRect.setFillStyle(0x00aa00))
+    .on('pointerup',   () => this.scene.restart());
 }
 
 function update() {
-  // תמיכה במקלדת (דסקטופ)
-  if      (cursors.left.isDown)  player.setVelocityX(-300);
-  else if (cursors.right.isDown) player.setVelocityX(300);
-  else                            player.setVelocityX(0);
+  // תמיכה במקלדת בדסקטופ (גולש יכול לשחק עם מקשים)
+  if (cursors.left.isDown) {
+    player.setVelocityX(-300);
+    pointerActive = false;            // מקלדת גוברת על מגע
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(300);
+    pointerActive = false;
+  } else if (!pointerActive) {
+    player.setVelocityX(0);
+  }
+}
+
+// פונקציית עזר להזיז את השחקן למיקום מסוים (בגבולות המסך)
+function movePlayerTo(x) {
+  const halfWidth = player.displayWidth / 2;
+  const minX = halfWidth;
+  const maxX = 800 - halfWidth;   // רוחב הקנבס קבוע 800
+  const clampedX = Phaser.Math.Clamp(x, minX, maxX);
+  player.x = clampedX;
 }
 
 function dropPoop() {
